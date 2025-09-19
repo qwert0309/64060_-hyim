@@ -1,0 +1,71 @@
+---
+title: "Assignment 1"
+author: "Brian Yim"
+date: "2025-09-05"
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+# 1. Download dataset from the web
+# I downloaded the data from Kaggle. https://www.kaggle.com/datasets/rashadferguson/college-sports-attendance?select=Attendance.xlsx 
+# There were categorial variables: University, Conference, Sport, Season. Also there were quantitative variables: Home_Games, Total_Attendance, Average_Attendance. I read the data as below.
+
+```{r}
+attendance <- read.csv("C:/Users/hyim/OneDrive - Kent State University/Desktop/New folder/attendance.csv")
+```
+
+```{r}
+# Quick peek at data
+head(attendance)
+```
+
+
+# 2. Descriptive statistics
+# Quantitative variable summaries
+```{r}
+summary(attendance$Home_Games)
+summary(attendance$Total_Attendance)
+summary(attendance$Average_Attendance)
+```
+# Categorical variables
+```{r}
+table(attendance$Conference)
+table(attendance$Sport)
+```
+
+# 3. Transform a variable
+# I transformed the attendance per game variable to attendance per game in thousands
+
+```{r}
+attendance$Avg_Attendance_K <- attendance$Average_Attendance / 1000
+```
+
+# 4. Plot quantitative variable
+```{r}
+hist(attendance$Total_Attendance,
+     main = "Histogram of Total Attendance",
+     xlab = "Total Attendance",
+     col = "lightblue")
+```
+# 5. Scatterplot: Home Games vs Total Attendance
+```{r}
+plot(attendance$Home_Games, attendance$Total_Attendance,
+     xlab = "Home Games",
+     ylab = "Total Attendance",
+     main = "Home Games vs Total Attendance",
+     col = "darkred", pch = 19)
+```
+
+
