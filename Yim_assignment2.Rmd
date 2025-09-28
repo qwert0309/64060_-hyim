@@ -1,0 +1,297 @@
+---
+title: "Assignment 2 FUNDAMENTALS OF MACHINE LEARNING"
+author: "Brian Yim"
+date: "2025-09-27"
+output: html_document
+---
+
+#### 1. Age = 40, Experience = 10, Income = 84, Family = 2, CCAvg = 2, Education_1 = 0, Education_2 = 1, Education_3 = 0, Mortgage = 0, Securities Account = 0, CD Account = 0, Online = 1, and Credit Card = 1. Perform a k-NN classification with all predictors except ID and ZIP code using k = 1. Remember to transform categorical predictors with more than two categories into dummy variables first. Specify the success class as 1 (loan acceptance), and use the default cutoff value of 0.5. How would this customer be classified?
+```{r}
+library(readr)
+library(class)
+library(caret)
+library(dplyr)
+library("gmodels")
+```
+
+#reading the data and creating the working dataset
+```{r}
+UniversalBank <- read.csv("C:/Users/hyim/OneDrive - Kent State University/Desktop/64060 Assignment2/UniversalBank.csv")
+mydata=data.frame(UniversalBank, header=T, stringsAsFactors=TRUE) # Create the working data set, converting data to factor
+View(mydata)
+```
+
+#check the characteristics and quality of the data
+```{r}
+table(is.na(mydata)) #Find if any missing data
+data.frame(colnames(mydata)) #Returns column index in the original data
+summary(mydata)
+```
+
+#manipulate the data
+```{r}
+mydata<-mydata[c(-1,-5)] #Remove ID and Zip code
+data.frame(colnames(mydata)) #Returns column index after removing two columns
+```
+
+
+#dummy Variables (Education_1, Education_2, Education_3) for categorial variable (Education)
+```{r}
+mydata$Education_1<-mydata$Education
+mydata$Education_1[mydata$Education==1]<-1
+mydata$Education_1[mydata$Education==2|mydata$Education==3]<-0
+
+mydata$Education_2<-mydata$Education
+mydata$Education_2[mydata$Education==2]<-1
+mydata$Education_2[mydata$Education==1|mydata$Education==3]<-0
+
+mydata$Education_3<-mydata$Education
+mydata$Education_3[mydata$Education==3]<-1
+mydata$Education_3[mydata$Education==1|mydata$Education==2]<-0
+
+mydata<-mydata[,-6] #Remove Education column to count double effect
+
+#Convert the "Personal Loan" Success class as Yes and Fail Class for readability 
+mydata$Personal.Loan [mydata$Personal.Loan==1]<-"Success"
+mydata$Personal.Loan [mydata$Personal.Loan==0]<-"Fail"
+
+#Move the Label column (the goal of the research), Personal Loan, to a first position. 
+mydata<-mydata%>%relocate(c(Personal.Loan))
+data.frame(colnames(mydata)) #Returns column index to check the result
+str(mydata)
+```
+#dividing the data into training (60%) and validation (40%) data sets
+```{r}
+set.seed(200)
+Train_Index_q1=createDataPartition(mydata$Personal.Loan, p=0.6, list=FALSE) #Create an index for the training sample (60% of the dataset)
+Train_Data_q1=mydata[Train_Index_q1,] #Create the training dataset using the index of the training sample
+Validation_Data_q1=mydata[-Train_Index_q1,] #Create the validation dataset using the reverse index of the training sample (40% of the dataset) 
+#Summarize both datasets to ensure the summary statistics are similar.
+summary(Train_Data_q1)
+summary(Validation_Data_q1)
+```
+#data Normalization on the Train set and apply it to the Validation set.(z-score scaling using “center” and “scale” as input method parameters.)
+```{r}
+#Copy the original data
+Train_Norm_q1<-Train_Data_q1
+Validation_Norm_q1<-Validation_Data_q1
+
+# Normalizing the data sets
+normq1<-preProcess(Train_Data_q1,method=c("center", "scale"))
+Train_Norm_q1<-predict(normq1, Train_Data_q1)
+Validation_Norm_q1<-predict(normq1, Validation_Data_q1)
+
+# Check the mean and variance of variables in the Training set (expected 0 and 1, respectively)
+summary(Train_Norm_q1)
+var(Train_Norm_q1[,2:14])
+
+# Check the mean and variance of variables in the other sets (expected none-0 and none-1, respectively)
+summary(Validation_Norm_q1)
+var(Validation_Norm_q1[,2:14])
+```
+#modeling k-NN and define predictors and labels for modeling on Train and Validation sets
+```{r}
+Train_Predictors<- Train_Norm_q1[,2:14]
+Train_Label <- Train_Norm_q1[,1]
+Validation_Predictors<-Validation_Norm_q1[,2:14]
+Validation_Label<- Validation_Norm_q1[,1]
+```
+
+#train a knn model
+```{r}
+Pred.Model<-knn(Train_Predictors, Validation_Predictors, cl=Train_Label,k=1)
+```
+
+#confusion matrix for the validation set
+```{r}
+CrossTable(x=Validation_Label,y= Pred.Model, prop.chisq = FALSE)
+Validation_Label<-as.factor(Validation_Label)
+confusionMatrix(Pred.Model,Validation_Label)
+```
+#evaluation of the New Applicant, whose profile was normalized based on the training set, K=1
+```{r}
+Applicant = data.frame(Age = 40, Experience = 10, Income = 84, Family = 2, CCAvg = 2, Education_1 = 0, Education_2 = 1, Education_3= 0, Mortgage = 0, Securities.Account = 0, CD.Account = 0, Online = 1, CreditCard = 1) #New Applicant Profile
+Applicant_Norm_q1<-predict(normq1, Applicant) # Normalizing the profile
+Applicant_Predictors<- Applicant_Norm_q1
+
+Pred.Applicant <- knn(Train_Predictors, Applicant_Predictors, cl=Train_Label, k=1, prob=TRUE)
+attributes(Pred.Applicant)
+Result<-data.frame(Pred.Applicant)
+Result
+head(Pred.Applicant)
+```
+
+#Answer for the Q1: With the kNN model set at k=1, the customer ended up being labeled as ‘Fail’ for loan acceptance, with a 100% probability
+
+
+
+
+
+
+#### 2. What is a choice of k that balances between overfitting and ignoring the predictor information?
+#compute knn for different k on Training and Validation
+```{r}
+Accuracy<- data.frame(k = seq(1, 14, 1), accuracy = rep(0, 14))#create a table with two columns :k and accuracy
+#To determin k, I am using the performance on the validation set value of k from 1 to 14
+for(i in 1:14) {
+     Pred.Model <- knn(Train_Predictors, Validation_Predictors, 
+                     cl = Train_Label, k = i)
+     Accuracy[i, 2] <- confusionMatrix(Pred.Model, Validation_Label)$overall[1] 
+}
+Accuracy 
+plot(Accuracy$accuracy) 
+```
+
+
+#Answer for Q2: The algorithm worked best with k=3. Using our current data (60% training, 40% validation), k=3 seems to give a good balance between overfitting and underfitting
+
+
+
+
+
+
+#### 3. Show the confusion matrix for the validation data that results from using the best k.
+
+```{r}
+Pred.Model2<-knn(Train_Predictors, Validation_Predictors, cl=Train_Label,k=3)
+CrossTable(x=Validation_Label,y= Pred.Model2, prop.chisq = FALSE)
+confusionMatrix(Pred.Model2,Validation_Label)
+```
+#Answer for Q3: The confusion matrix for k=3 showed an accuracy of 0.9545, meaning about 95.45% of the loan acceptance predictions were correct, while roughly 4.55% were misclassified
+
+
+
+
+
+#### 4. Consider the following customer: Age = 40, Experience = 10, Income = 84, Family = 2, CCAvg = 2, Education_1 = 0, Education_2 = 1, Education_3 = 0, Mortgage = 0, Securities Account = 0, CD Account = 0, Online = 1 and Credit Card = 1. Classify the customer using the best k.
+
+#best k was 3 with the highest accuracy so
+```{r}
+#Evaluation of the New Person using the best k=3
+Pred.Applicant <- knn(Train_Predictors, Applicant_Predictors, cl=Train_Label, k=3, prob=TRUE)
+attributes(Pred.Applicant)
+Result2<-data.frame(Pred.Applicant)
+Result2
+head(Pred.Applicant)
+```
+
+#Answer for Q4: With the current kNN model (k=3), the customer was classified as ‘fail’ for loan acceptance, with a probability of about 66.7%
+
+
+
+
+#### 5. Repartition the data, this time into training, validation, and test sets (50% : 30% : 20%). Apply the k-NN method with the k chosen above. Compare the confusion matrix of the test set with that of the training and validation sets. Comment on the differences and their reason.
+
+
+#dividing the data into training (50%), validation (30%), and test  (20%) sets
+```{r}
+set.seed(1)
+Test_Index_q5=createDataPartition(mydata$Personal.Loan, p=0.2, list=FALSE) #Create an index for the testing sample (20% of the dataset)
+Test_Data_q5= mydata[Test_Index_q5,] #Create the testing dataset using the index of the Test_Index sample
+TraVal_Data_q5= mydata[-Test_Index_q5,] #Validation and Training data is rest
+
+Train_Index_q5=createDataPartition(TraVal_Data_q5$Personal.Loan, p=0.625, list=FALSE) #Create an index for the testing sample (62.5% of TraVal dataset = 50% of the total dataset)
+Train_Data_q5=TraVal_Data_q5[Train_Index_q5,] #Create the training dataset using the index of the Train sample
+Validation_Data_q5=TraVal_Data_q5 [-Train_Index_q5,] #Create the validation dataset using the reverse index of the training sample (37.5% of TraVal dataset = 20% of the total dataset)
+#Summarize both datasets to ensure the summary statistics are similar.
+summary(Train_Data_q5)
+summary(Validation_Data_q5)
+summary(Test_Data_q5)
+```
+
+#data Normalization on the Train set and apply it to Validation set (z-score scaling using “center” and “scale” as input method parameters.)
+```{r}
+#Copy the original data
+Train_Norm_q5<-Train_Data_q5
+Valid_Norm_q5<-Validation_Data_q5
+TraVal_Norm_q5<-TraVal_Data_q5
+Test_Norm_q5<- Test_Data_q5
+
+# use preProcess to normalize all data
+norm.values.q5<-preProcess(Train_Data_q5,method=c("center", "scale"))
+Train_Norm_q5<-predict(norm.values.q5, Train_Data_q5)
+Valid_Norm_q5<-predict(norm.values.q5, Validation_Data_q5)
+
+# Check the mean and variance of variables in the other sets
+summary(Train_Norm_q5)
+var(Train_Norm_q5[,2:14])
+summary(Valid_Norm_q5)
+var(Valid_Norm_q5[,2:14])
+```
+#modeling k-NN, Define predictors and labels for modeling on Train and Validation sets
+```{r}
+Train_Predictors_q5<- Train_Norm_q5[,2:14]
+Train_Label_q5<- Train_Norm_q5[,1]
+Train_Label_q5<-as.factor(Train_Label_q5)
+Validation_Predictors_q5<- Valid_Norm_q5[,2:14]
+Validation_Label_q5<- Valid_Norm_q5[,1]
+Validation_Label_q5<-as.factor(Validation_Label_q5)
+```
+
+#hypertuning using the validation set. Compute knn for different k on Training and Validation
+```{r}
+Accuracy_q5<- data.frame(k = seq(1, 14, 1), accuracy = rep(0, 14))#create a table with two columns :k and accuracy
+#To determin k, I am using the performance on the validation set value of k from 1 to 14
+for(i in 1:14) {
+     Pred.Model_k <- knn(Train_Predictors_q5, Validation_Predictors_q5, 
+                     cl = Train_Label_q5, k = i)
+     Accuracy_q5[i, 2] <- confusionMatrix(Pred.Model_k, Validation_Label_q5)$overall[1] 
+}
+Accuracy_q5 
+plot(Accuracy_q5$accuracy) 
+```
+
+#train a knn model for Training set. 
+```{r}
+Pred.Model.train<-knn(Train_Predictors_q5, Train_Predictors_q5, cl=Train_Label_q5,k=3)
+```
+
+#confusion matrix for the Training set.
+```{r}
+CrossTable(x=Train_Label_q5,y= Pred.Model.train, prop.chisq = FALSE)
+confusionMatrix(Pred.Model.train, Train_Label_q5)
+```
+#train a knn model for the Validation set
+```{r}
+Pred.Model.validation<-knn(Train_Predictors_q5, Validation_Predictors_q5, cl=Train_Label_q5,k=3)
+```
+
+#confusion matrix for the validation set
+```{r}
+CrossTable(x=Validation_Label_q5,y= Pred.Model.validation, prop.chisq = FALSE)
+confusionMatrix(Pred.Model.validation,Validation_Label_q5)
+```
+#data Normalization on (Train+Validation) set and apply it to Test set (z-score scaling using “center” and “scale” as input method parameters)
+```{r}
+# Use combined set to normalize
+norm.values.combined.q5 <- preProcess(TraVal_Data_q5, method=c("center", "scale"))
+Traval_Norm_q5<-predict(norm.values.combined.q5, TraVal_Data_q5)
+Test_Norm_q5<-predict(norm.values.combined.q5, Test_Data_q5)
+
+# Check the mean and variance of variables in the other sets
+summary(Traval_Norm_q5)
+var(Traval_Norm_q5[,2:14])
+summary(Test_Norm_q5)
+var(Test_Norm_q5[,2:14])
+```
+#modeling k-NN, Define predictors and labels for modeling on Train+Validation and test sets 
+```{r}
+TraVal_Predictors_q5<- TraVal_Norm_q5[,2:14]
+TraVal_Label_q5 <- TraVal_Norm_q5[,1]
+TraVal_Label_q5<-as.factor(TraVal_Label_q5)
+Test_Predictors_q5<-Test_Norm_q5[,2:14]
+Test_Label_q5<- Test_Norm_q5[,1]
+Test_Label_q5<-as.factor(Test_Label_q5)
+```
+
+#train a knn model
+```{r}
+Pred.Model.test<-knn(TraVal_Predictors_q5, Test_Predictors_q5, cl=TraVal_Label_q5,k=3)
+```
+
+#confusion matrix for the test data
+```{r}
+CrossTable(x=Test_Label_q5,y= Pred.Model.test, prop.chisq = FALSE)
+confusionMatrix(Pred.Model.test,Test_Label_q5)
+```
+#Answer for Q5: The best k from Q2 was 3, and hyperparameter tuning on the new datasets (50% training, 30% validation, 20% test) also confirmed k=3 for the k-NN model.Accuracy based on Training and Validation sets: Training = 0.9728, Validation = 0.96. Accuracy based on (Training + Validation) and Test sets: Test = 0.904. The model performs best on the training set, since it was trained on that data. Validation accuracy is slightly lower, and test accuracy is the lowest because the model was tuned for the validation set, not the test set that has not been seen yet.
