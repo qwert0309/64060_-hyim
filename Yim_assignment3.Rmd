@@ -1,0 +1,239 @@
+---
+title: "BA64060_Assignment3"
+author: "Brian Yim"
+date: "2025-10-09"
+output:
+  word_document: default
+  html_document:
+    df_print: paged
+---
+
+####The file UniversalBank.csv contains data on 5000 customers of Universal Bank. The data include customer demographic information (age, income, etc.), the customer’s relationship with the bank (mortgage, securities account, etc.), and the customer response to the last personal loan campaign (Personal Loan). Among these 5000 customers, only 480 (= 9.6%) accepted the personal loan that was offered to them in the earlier campaign. In this exercise, we focus on two predictors: Online (whether or not the customer is an active user of online banking services) and Credit Card (abbreviated CC below) (does the customer hold a credit card issued by the bank), and the outcome Personal Loan (abbreviated Loan below).
+```{r}
+library(e1071)
+library(caret)
+```
+
+#reading the data
+```{r}
+library(readr)
+UniversalBank <- read.csv("C:/Users/hyim/OneDrive - Kent State University/Desktop/64060 Assignment2/UniversalBank (2).csv")
+```
+
+```{r}
+mydata<-UniversalBank
+data.frame(colnames(mydata))
+```
+
+```{r}
+mydata<-UniversalBank
+data.frame(colnames(mydata))
+```
+
+
+#I will select the variables, personal loan, online, credit card which are 10, 13, and 14 
+```{r}
+mydata<-mydata[c(10,13,14)]
+table(is.na(mydata)) 
+```
+
+```{r}
+View(mydata)
+mydata$PersonalLoan<-mydata$`Personal.Loan` 
+class(mydata$PersonalLoan) 
+```
+
+```{r}
+mydata$PersonalLoan <- as.factor(mydata$PersonalLoan)
+```
+
+```{r}
+class(mydata$PersonalLoan)
+```
+
+```{r}
+mydata$Online <- as.factor(mydata$Online)
+```
+
+
+```{r}
+class(mydata$Online)
+```
+```{r}
+mydata$CreditCard <- as.factor(mydata$CreditCard)
+```
+
+```{r}
+class(mydata$CreditCard)
+```
+
+```{r}
+str(mydata) # check if the converting the variables was successful.
+```
+
+```{r}
+table(mydata$PersonalLoan) # Check the frequency of PersonalLoan and see if the sum is 5000
+```
+
+```{r}
+table(mydata$Online) # Check the frequency of Online and see if the sum is 5000
+```
+
+```{r}
+table(mydata$CreditCard) # Check the frequency of CreditCard and see if the sum is 5000
+```
+#dividing the data into 60% and 40% for training and validation
+```{r}
+set.seed(1)
+Train_Index=createDataPartition(mydata$PersonalLoan,p=0.6,list=FALSE)
+Train=mydata[Train_Index,]
+Validation=mydata[-Train_Index,]
+summary(Train)
+```
+
+```{r}
+summary(Validation)
+```
+#Now the data is ready to be analyzed
+
+####A. Create a pivot table for the training data with Online as a column variable, CC as a row variable, and Loan as a secondary row variable. The values inside the table should convey the count
+
+```{r}
+attach(Train)
+ftable(CreditCard,PersonalLoan,Online)
+```
+
+#Answer for A: As directed I created the pivot table. Online is the column variable and first row is the creditcard and second row is the personalloan and the counts are for the training set
+
+####B. Consider the task of classifying a customer who owns a bank credit card and is actively using online banking services. Looking at the pivot table, what is the probability that this customer will accept the loan offer? [This is the probability of loan acceptance (Loan = 1) conditional on having a bank credit card (CC = 1) and being an active user of online banking services (Online = 1)]
+
+```{r}
+ftable(CreditCard, Online, PersonalLoan)
+```
+
+
+```{r}
+prop.table(ftable(CreditCard, Online, PersonalLoan), margin=1) # A pivot table was created using the training data, with Personal Loan as the column variable, CreditCard as the primary row variable, and Online as the secondary row variable. This table displays the conditional probability of loan acceptance based on each combination of CreditCard and Online statuses, ensuring that the sum of probabilities across each row equals 1.
+```
+####Answer for B: The probability is 0.09369. The number of customers (cc ∩ online = 503 + 52) = 555. The number of customers (Loan = 1) within the (cc∩online)=52. 52/555
+
+
+#C. Create two separate pivot tables for the training data. One will have Loan (rows) as a function of Online (columns) and the other will have Loan (rows) as a function of CC
+
+```{r}
+ftable(PersonalLoan,Online)
+```
+```{r}
+prop.table(ftable(PersonalLoan,Online), margin=1)
+```
+
+
+```{r}
+ftable(PersonalLoan, CreditCard) #The values inside the table should convey the count
+```
+```{r}
+prop.table(ftable(PersonalLoan, CreditCard), margin=1) #The pivot table calculates the probability of having CC conditional on Loan acceptance (the sum probability of row (the condition, loan acceptance) is 1).  
+```
+####Answer to C: 2 tables were created
+
+
+#D. Compute the following quantities [P(A | B) means “the probability ofA given B”]
+#D(i). P(CC = 1 | Loan = 1) (the proportion of credit card holders among the loan acceptors)
+
+```{r}
+ftable(PersonalLoan, CreditCard)
+```
+
+```{r}
+prop.table(ftable(PersonalLoan, CreditCard), margin=1)
+```
+####Answer to D(i) is 0.31597
+
+#D(ii). P(Online = 1 | Loan = 1)
+```{r}
+ftable(PersonalLoan, Online)
+```
+
+```{r}
+prop.table(ftable(PersonalLoan, Online), margin=1)
+```
+####Answer to D(ii) is 0.59722
+
+
+#D(iii). P(Loan = 1) (the proportion of loan acceptors))
+
+```{r}
+ftable(PersonalLoan)
+```
+
+```{r}
+prop.table(ftable(PersonalLoan))
+```
+
+####Answer to D(iii) is 0.096
+
+
+#D(iv). P(CC = 1 | Loan = 0)
+
+```{r}
+ftable(PersonalLoan, CreditCard)
+```
+
+```{r}
+prop.table(ftable(PersonalLoan, CreditCard), margin=1)
+```
+
+####Answer to D(iv) is 0.29719
+
+
+#D(v). P(Online = 1 | Loan = 0)
+
+```{r}
+ftable(PersonalLoan, Online)
+```
+```{r}
+prop.table(ftable(PersonalLoan, Online), margin=1)
+```
+
+####Answer to D(v) is 0.6006
+
+
+#D(vi).  P(Loan = 0)
+
+```{r}
+prop.table(ftable(PersonalLoan))
+```
+####Answer to D(vi) is 0.904
+
+
+#E. Use the quantities computed above to compute the naive Bayes probability P(Loan = 1 | CC = 1, Online = 1)
+
+#{(91/288) * (172/288) * (288/3000)} / [{(91/288) * (172/288) * (288/3000)} + {(806/2712) * (1629/2712) * (2712/3000)}] = (15652/864000) / {(15652/864000) + (1312974/8136000) = 0.01811 / (0.01811 + 0.161378) = 0.01811 / 0.179488 = 0.100926687 ≈ 0.1009267
+#Answer for E: Nave Bayes P(Loan = 1 | CC = 1, Online = 1) = 0.1009267
+
+
+#F. Compare this value with the one obtained from the pivot table in (B). Which is a more accurate estimate?
+
+#Answer for F: The value obtained from the Exact Bayes calculation (0.094) is very close to that from the Naïve Bayes calculation (0.1009267), with a small difference of 0.0069. The Exact Bayes method is expected to yield a more accurate result because it identifies all records that share the same combination of predictor values. In contrast, the Naïve Bayes approach estimates the conditional probabilities of each predictor individually (P(Xi|C1)) and multiplies them together under the assumption that the predictors are independent. Although this independence assumption is rarely true in real-world data—since predictors often exhibit some correlation—the Naïve Bayes method generally performs well because it tends to preserve the correct rank ordering of predicted probabilities.
+
+#G. Which of the entries in this table are needed for computing P(Loan = 1 | CC = 1, Online = 1)? Run naive Bayes on the data. Examine the model output on training data, and find the entry that corresponds to P(Loan = 1 | CC = 1, Online = 1). Compare this to the number you obtained in (E)
+
+```{r}
+Loan_nb<-naiveBayes(PersonalLoan ~ Online+CreditCard,data=Train)
+Loan_nb
+```
+
+```{r}
+pred.class <- predict(Loan_nb, newdata = Train)
+confusionMatrix(pred.class, Train$PersonalLoan)
+```
+
+```{r}
+pred.prob <- predict(Loan_nb, newdata=Train, type="raw")
+df <- data.frame(actual = Train$PersonalLoan, predicted = pred.class, pred.prob)
+df[Train$PersonalLoan==1&Train$Online==1&Train$CreditCard==1,]
+```
+
+#Answer (Model Evaluation): The Naïve Bayes Classifier achieved an accuracy of 0.904, calculated as the proportion of correctly classified samples to the total number of samples. Since the model predicted all cases as “Loan reject (0),” the accuracy is computed as 2712/3000. The sensitivity (true positive rate) is 1, calculated as (true positives)/(true positives + false negatives) = 2712/(2712 + 0) = 1. The specificity (true negative rate) is 0, calculated as (true negatives)/(true negatives + false positives) = 0/(0 + 288) = 0
+#Answer (Predicted P(Loan = 1 | CC = 1, Online = 1)): The Naïve Bayes model predicted a probability of 0.1009267, which matches the value obtained previously in (E)
+
