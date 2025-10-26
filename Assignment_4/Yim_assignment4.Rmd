@@ -1,0 +1,387 @@
+---
+title: "Machine Learning Assignment 4"
+author: "Brian Yim"
+date: "2025-10-26"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+####An equities analyst is studying the pharmaceutical industry and would like your help in exploring and understanding the financial data collected by her firm. Her main objective is to understand the structure of the pharmaceutical industry using some basic financial measures. Financial data gathered on 21 firms in the pharmaceutical industry are available in the file Pharmaceuticals.csv. For each firm, the following variables are recorded:
+```{r}
+library(readr)
+library(factoextra)
+library(tidyverse)
+library(broom)
+library(clValid)
+library('fastDummies')
+library(flexclust)
+library(dplyr)
+library(ggplot2)
+library(zoo)
+library(reshape2)
+library(NbClust)
+```
+
+#reading the data
+```{r}
+Pharma <- read.csv("C:/Users/hyim/OneDrive - Kent State University/Desktop/64060 Assignment/Pharmaceuticals.csv")
+View(Pharma)
+data.frame(colnames(Pharma))
+str(Pharma)
+```
+#Q.a. The objective of this analysis is to identify distinct groups of pharmaceutical firms that exhibit similar financial characteristics. The dataset consists of 21 firms and 12 variables, of which the first nine numerical indicators—Market Capitalization, Beta, Price/Earnings Ratio, Return on Equity (ROE), Return on Assets (ROA), Asset Turnover, Leverage, Estimated Revenue Growth, and Net Profit Margin—were selected for clustering. All numerical variables were standardized using z-scores to mitigate the effects of differing scales and units of measurement. This step ensures that variables measured in large magnitudes, such as Market Capitalization, do not disproportionately influence those expressed as ratios or percentages. Equal weighting was applied to all variables, as no theoretical or empirical justification existed for prioritizing one financial measure over another.Clustering was performed using the k-means algorithm on the standardized data. The k-means method partitions the observations into k clusters by minimizing the within-cluster sum of squares, producing compact and internally coherent groups. The optimal number of clusters was determined using the elbow method and silhouette width, and NbClust Package and all of the method indicated that a five-cluster solution provided the best balance between cluster separation and interpretability. The resulting clusters reveal meaningful distinctions among firms in terms of size, profitability, growth, and financial structure. Please see below for the solution for "a"
+
+```{r}
+#set the working data
+mydata<-Pharma [,c(3:11)] #select numerical variables (1-9)
+View(mydata)
+row.names(mydata)<-Pharma[,1]#set row names to the pharmaceutical column
+View(mydata)
+# Standardize data (important for fair comparison)
+pharma_scaled <- scale(mydata)
+```
+
+```{r}
+#Determine optimal number of clusters (k) using elbow and silhouette methods
+# Elbow method
+fviz_nbclust(pharma_scaled, kmeans, method = "wss") + 
+  ggtitle("Elbow Method for Optimal k")
+
+#Silhouette method
+fviz_nbclust(pharma_scaled, kmeans, method = "silhouette") + 
+  ggtitle("Silhouette Method for Optimal k")
+#NbClust Package for determining the best number of clusters
+K_Suggestion<- NbClust(pharma_scaled[,1:9], min.nc = 4, max.nc =6, method="kmeans")
+```
+```{r}
+#Apply k-means clustering
+set.seed(123) # for reproducibility
+km <- kmeans(pharma_scaled, centers = 5, nstart = 25)
+#Add cluster assignments to dataset
+mydata$Cluster <- factor(km$cluster)
+#Visualize clusters
+fviz_cluster(km, data = pharma_scaled, geom = "point", ellipse.type = "norm",
+             main = "K-Means Clustering of Pharmaceutical Firms")
+```
+
+
+#Run k-means algorithm (k=5)
+```{r}
+#run the k-means algorithm to cluster the companies (k=5) in order to evaluate the clustering quality
+k5<-kmeans(pharma_scaled, centers=5, nstart=25) # test run with k=5, and 25 starts (re-run). 
+k5
+
+cluster5<-data.frame(k5$cluster)
+View(cluster5)
+glance(k5)
+
+dunn_k5<- dunn(clusters = k5$cluster, Data = pharma_scaled) #A higher value is considerably superior. 
+dunn_k5
+fviz_cluster(k5,data=pharma_scaled) #Visualize the cluster
+
+#Best variables that separating the clusters: Contributing variables for cluster spread
+k5$spread<-as.data.frame(t(k5$centers))
+k5$spread$max<-do.call(pmax, k5$spread[1:4]) # find the highest value within the row (each financial performance feature) and save the value to "max"
+k5$spread$min<-do.call(pmin, k5$spread[1:4])# find the lowest value within the row (each financial performance feature) and save the value to "min"
+k5$spread$gap<-k5$spread$max-k5$spread$min# calculate the difference between max and min
+k5$spread
+```
+
+
+#Q.b. The k-means clustering analysis identified five distinct groups of pharmaceutical firms, each exhibiting unique financial profiles. The clusters differ both in size and internal homogeneity. Cluster 5 is the largest, encompassing eight firms, while Cluster 1 is the smallest, containing only two firms. Clusters 2, 3, and 4 are intermediate in size, with four, four, and three firms, respectively. Within-cluster dispersion, as measured by the within-cluster sum of squares, highlights differences in homogeneity across clusters. Cluster 1 exhibits the lowest dispersion, reflecting a high degree of similarity among its two member firms, whereas Cluster 5 shows the largest dispersion, consistent with its greater number of companies. The remaining clusters demonstrate moderate dispersion, indicating a balance between variability and cohesion. Examination of the cluster centroids provides insight into the financial characteristics defining each group. Cluster 1 consists of firms with low net profit margins, high price-to-earnings ratios, and low return on equity, suggesting limited profitability despite elevated market expectations. Cluster 2 includes companies with high beta and leverage, low market capitalization, and low revenue growth, reflecting smaller, riskier firms with constrained growth potential. Cluster 3 is characterized by high asset turnover, low leverage, substantial market capitalization, and strong returns on assets and equity, indicating large, efficient, and profitable firms. Cluster 4 comprises firms with low asset turnover, low market capitalization, and low price-to-earnings ratios, yet high revenue growth, highlighting smaller firms focused on expansion rather than operational efficiency. Finally, Cluster 5 features low beta, high net profit margins, low price-to-earnings ratios, and moderate revenue growth, representing stable, profitable companies with conservative risk profiles.
+
+
+```{r}
+# Calculate mean values of each numerical variable by cluster
+cluster_summary <- mydata %>%
+  group_by(Cluster) %>%
+  summarise(across(Market_Cap:Net_Profit_Margin, mean, .names = "avg_{col}"))
+
+print(cluster_summary)
+
+# View which firms belong to which cluster
+mydata[, c("Cluster")]
+```
+
+```{r, fig.width=15,fig.height=10}
+k5$cluster
+```
+#Cluster Size
+```{r}
+#[Section 2.1]
+k5$size
+table(k5$cluster)
+k5$centers
+```
+
+#Within-cluster sum of Squares
+```{r}
+k5$withinss # Vector of within-cluster sum of squares, one component per cluster.
+dist(k5$centers) #distance between the centers 
+
+```
+
+```{r}
+# Plotting profile plot based on scaled values (k = 5)
+library(reshape2)
+library(ggplot2)
+
+cluster5dimension <- data.frame(k5$centers)
+print(cluster5dimension) # Scaled centroid values
+
+cluster5dimensions <- as.data.frame(t(cluster5dimension)) # Transpose rows and columns
+cluster5dimensions$k5measures <- rownames(cluster5dimensions)
+
+# Rename columns
+colnames(cluster5dimensions) <- c("cluster1","cluster2","cluster3","cluster4","cluster5","k5measures")
+
+# Melt for ggplot
+cluster5dimensions_melt <- melt(cluster5dimensions, id.vars = "k5measures")
+
+# Profile plot
+ggplot(cluster5dimensions_melt, aes(x = k5measures, y = value, color = variable, group = variable)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Cluster Profile Plot (k=5)", x = "Financial Measure", y = "Scaled Value")
+
+# Groundwork to inspect cluster characteristics
+mydata_scale_cluster5 <- cbind(pharma_scaled, cluster5 = k5$cluster) # scaled data + cluster
+mydata_cluster5 <- cbind(mydata, cluster5 = k5$cluster)             # original numerical variables + cluster
+Pharmaceuticals_cluster5 <- cbind(Pharma, cluster5 = k5$cluster)   # full dataset + cluster
+
+# View the datasets
+View(mydata_scale_cluster5)
+View(mydata_cluster5)
+View(Pharmaceuticals_cluster5)
+```
+
+
+#Plotting profile (centroid) of clusters
+```{r}
+library(reshape2)
+library(ggplot2)
+
+# Profile plot based on scaled cluster centroids
+cluster5dimension <- data.frame(k5$centers)
+print(cluster5dimension)  # Mean values of each attribute (scaled data)
+
+cluster5dimensions <- as.data.frame(t(cluster5dimension)) # Transpose
+cluster5dimensions$k5measures <- rownames(cluster5dimensions)
+
+# Rename columns
+colnames(cluster5dimensions) <- c("cluster1","cluster2","cluster3","cluster4","cluster5","k5measures")
+
+# Melt for ggplot
+cluster5dimensions_melt <- melt(cluster5dimensions, id.vars = "k5measures")
+
+# Plot profile plot
+ggplot(cluster5dimensions_melt, aes(x = k5measures, y = value, color = variable, group = variable)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Cluster Profile Plot (k=5)", x = "Financial Measures", y = "Scaled Value")
+
+# Attach cluster numbers to datasets
+cluster5 <- k5$cluster  # make sure cluster vector exists
+mydata_scale_cluster5 <- cbind(pharma_scaled, cluster5 = cluster5)
+mydata_cluster5 <- cbind(mydata, cluster5 = cluster5)
+Pharmaceuticals_cluster5 <- cbind(mydata, cluster5 = cluster5)
+
+# View datasets
+View(mydata_scale_cluster5)
+View(mydata_cluster5)
+View(Pharmaceuticals_cluster5)
+```
+
+#Characteristics of each cluster
+```{r}
+library(dplyr)
+
+# Cluster 1
+cluster5_1 <- filter(mydata_cluster5, cluster5 == 1)
+print(cluster5_1)
+
+# Cluster 2
+cluster5_2 <- filter(mydata_cluster5, cluster5 == 2)
+print(cluster5_2)
+
+# Cluster 3
+cluster5_3 <- filter(mydata_cluster5, cluster5 == 3)
+print(cluster5_3)
+
+# Cluster 4
+cluster5_4 <- filter(mydata_cluster5, cluster5 == 4)
+print(cluster5_4)
+
+# Cluster 5
+cluster5_5 <- filter(mydata_cluster5, cluster5 == 5)
+print(cluster5_5)
+
+```
+
+
+#Q.c.Since variables 10–12 are categorical and were not used in the clustering, their distributions were examined within each cluster to identify patterns.Median Recommendation: Cluster 5 contains all levels of the Median_Recommendation variable, with “Hold” appearing most frequently, making it a distinguishing feature of this cluster. Notably, Cluster 5 is also the only cluster to include the “Strong Buy” level. In contrast, the “Moderate Buy” category is evenly distributed across all clusters, indicating that it does not define any particular cluster.Location: While the “US” appears in all clusters, it is most prominent in Cluster 5, which exhibits the highest frequency of US-based firms, suggesting a geographical characteristic for this cluster. Exchange: The clustering does not clearly separate firms based on the Exchange variable. Clusters 1, 3, 4, and 5 consist solely of NYSE-listed firms, whereas Cluster 2 has an equal representation of AMEX, NASDAQ, and NYSE, indicating that Exchange is not a strong differentiator among clusters in this dataset.
+
+
+#Subset of categorical variables (10-12)
+```{r}
+library(dplyr)
+
+# Attach cluster numbers to the original dataset including categorical variables
+Pharmaceuticals_cluster5 <- cbind(Pharma, cluster5 = k5$cluster)
+
+# Check column names to confirm categorical variables are included
+colnames(Pharmaceuticals_cluster5)
+
+
+# Select unused categorical variables + cluster
+mydata5_c <- Pharmaceuticals_cluster5[, c("Median_Recommendation", "Location", "Exchange", "cluster5")]
+
+# Rename cluster for clarity
+colnames(mydata5_c)[4] <- "Cluster"
+
+# Frequency tables for each categorical variable by cluster
+table(mydata5_c$Cluster, mydata5_c$Median_Recommendation)
+table(mydata5_c$Cluster, mydata5_c$Location)
+table(mydata5_c$Cluster, mydata5_c$Exchange)
+
+# Alternatively, using dplyr
+mydata5_c %>%
+  group_by(Cluster, Median_Recommendation) %>%
+  summarise(count = n())
+
+mydata5_c %>%
+  group_by(Cluster, Location) %>%
+  summarise(count = n())
+
+mydata5_c %>%
+  group_by(Cluster, Exchange) %>%
+  summarise(count = n())
+
+```
+
+#Frequency of each categorical variable within cluster
+```{r}
+#F-table (unused variable vs cluster)
+attach(mydata5_c)
+```
+
+#Bar chart of Median_Recommendation 
+```{r}
+# Create a pivot table (frequency table) for Median_Recommendation by cluster
+Median_Recommendation_table <- ftable(Pharmaceuticals_cluster5$Median_Recommendation, Pharmaceuticals_cluster5$cluster5)
+
+# View the table
+Median_Recommendation_table
+
+# Bar plot
+color.names <- c("coral4", "blueviolet", "darkblue", "gold")  # Colors for each recommendation
+barplot(Median_Recommendation_table,
+        beside = TRUE,
+        ylim = c(0, 5),
+        xlab = "Cluster",
+        ylab = "Frequency",
+        names.arg = c("Cluster1", "Cluster2", "Cluster3", "Cluster4", "Cluster5"),
+        col = color.names,
+        axis.lty = "solid")
+
+# Add legend
+legend("topright",
+       legend = c("Hold", "Moderate Buy", "Moderate Sell", "Strong Buy"),
+       cex = 0.8,
+       fill = color.names,
+       title = "Median_Recommendation")
+```
+
+#Bar chart of Location 
+```{r}
+# Create a pivot table for Location by cluster
+Location_table <- ftable(Pharmaceuticals_cluster5$Location, Pharmaceuticals_cluster5$cluster5)
+
+# View the table
+Location_table
+
+# Define colors for each location
+color.names <- c("coral4","blueviolet","darkblue","gold","blue","deeppink","grey7")
+
+# Bar plot
+barplot(Location_table,
+        beside = TRUE,
+        ylim = c(0, 6),
+        xlab = "Cluster",
+        ylab = "Frequency",
+        names.arg = c("Cluster1", "Cluster2", "Cluster3", "Cluster4", "Cluster5"),
+        col = color.names,
+        axis.lty = "solid")
+
+# Add legend
+legend("topright",
+       legend = c("CANADA", "FRANCE", "GERMANY", "IRELAND", "SWITZERLAND", "UK", "US"),
+       cex = 0.8,
+       fill = color.names,
+       title = "Location")
+
+```
+#Bar chart of Exchange 
+```{r}
+# Create a pivot table for Exchange by cluster
+Exchange_table <- ftable(Pharmaceuticals_cluster5$Exchange, Pharmaceuticals_cluster5$cluster5)
+
+# View the table
+Exchange_table
+
+# Bar plot
+color.names <- c("coral4","blueviolet","darkblue")  # Colors for each exchange
+barplot(Exchange_table,
+        beside = TRUE,
+        ylim = c(0, 9),
+        xlab = "Cluster",
+        ylab = "Frequency",
+        names.arg = c("Cluster1", "Cluster2", "Cluster3", "Cluster4", "Cluster5"),
+        col = color.names,
+        axis.lty = "solid")
+
+# Add legend
+legend("topright",
+       legend = c("AMEX", "NASDAQ", "NYSE"),
+       cex = 0.8,
+       fill = color.names,
+       title = "Exchange")
+```
+
+#Q.d. Based on the distinguishing financial characteristics identified in the k-means clustering analysis, each of the five clusters was assigned a descriptive name to capture its defining traits. Cluster 1, “High Valuation Firms,” is characterized primarily by elevated price-to-earnings ratios, indicating firms with high market expectations relative to earnings. Cluster 2, “Highly Leveraged Firms,” is distinguished by higher financial leverage, indicating firms that rely more heavily on debt financing and exhibit greater financial risk. Cluster 3, “Large-Cap Firms,” stands out due to high market capitalization, identifying well-established, sizable companies with substantial financial resources. Cluster 4, “High Growth Firms,” is defined by strong revenue growth, reflecting firms focused on expansion and aggressive market development. Finally, Cluster 5, “Balanced Firms,” exhibits no single distinctive financial feature, representing companies with moderate and conventional financial profiles across the measured variables. 
+
+
+```{r, fig.width=15,fig.height=10}
+##plotting profile plot based on the scaled value (k=5)
+cluster5dimension<-data.frame(k5$centers)
+cluster5dimensions<-as.data.frame(t(cluster5dimension))
+cluster5dimensions$k5measures <- rownames(cluster5dimensions)
+colnames(cluster5dimensions) <- c("cluster 1","cluster 2","cluster 3","cluster 4","cluster 5", "k5measures")
+cluster5dimensions <- melt(cluster5dimensions, id.vars=c("k5measures"))
+ggplot(cluster5dimensions, aes(x=k5measures, y=value, color=variable, group=variable)) + geom_line() + geom_point()
+```
+
+
+```{r}
+#Assign descriptive cluster names based on characteristics
+
+# Adjust names based on cluster characteristics
+mydata <- mydata %>%
+  mutate(Cluster_Name = case_when(
+    Cluster == 1 ~ "Global Industry Leaders",
+    Cluster == 2 ~ "Established Competitors",
+    Cluster == 3 ~ "Emerging Innovators",
+    Cluster == 4 ~ "High-Growth Specialists",
+    Cluster == 5 ~ "Niche/Small Firms"
+  ))
+```
+
+
+
+
