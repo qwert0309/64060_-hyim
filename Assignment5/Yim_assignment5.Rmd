@@ -1,0 +1,226 @@
+---
+title: "Assignment 5"
+author: "Brian Yim"
+date: "2025-11-22"
+output:
+  word_document: default
+  html_document: default
+---
+
+# First, I set all the working environment (libraries)
+
+```{r}
+library(readr)
+library(cluster)
+library(factoextra)
+library(NbClust)
+library(FactoMineR)
+library(pdist)
+library(flexclust)
+library(purrr)
+```
+
+#Then, I read the data
+```{r}
+cereals <- read.csv("C:/Users/hyim/OneDrive - Kent State University/Desktop/64060 Assignment/Cereals.csv")
+View(cereals)
+```
+
+#Q1. Apply hierarchical clustering to the data using Euclidean distance to the normalized measurements. Use Agnes to compare the clustering from single linkage, complete linkage, average linkage, and Ward. Choose the best method.
+
+#Answer: The most appropriate clustering method can be identified using a numerical indicator of clustering strength, known as the agglomerative coefficient. Of the four methods examined, the Ward’s method produces the strongest clustering structure, with an AC of 0.9046.
+
+```{r}
+row.names(cereals)<-cereals[,1]#set row names to the cereals column
+data.frame(colnames(cereals))
+```
+
+
+#checking any missing data
+```{r}
+table(is.na(cereals))
+```
+
+```{r}
+mydata<-na.omit(cereals)
+table(is.na(mydata))
+```
+#use a data frame contains only variables that are nutritional information, store display, and consumer ratings because they are numeric
+```{r}
+mydata<-mydata[,c(4:16)]
+```
+
+#scaling the data
+```{r}
+scaledmydata<-scale(mydata)
+View(scaledmydata) 
+```
+
+#using Euclidean distance apply hierarchical clustering
+```{r}
+d<-dist(scaledmydata,method="euclidean")
+hc_complete<-hclust(d,method="complete") 
+plot(hc_complete, cex=0.6, hang=-1) 
+```
+
+#Four linkage methods using Agnes to compare the clustering: Single linkage, Complete linkage, Average linkage (UPGMA), Ward’s method
+
+```{r}
+hc_single<-agnes(d,method="single") #Hierarchical clustering using Single Linkage
+hc_single$ac #Agglomerative coefficient of hc_single
+```
+
+```{r}
+hc_complete<-agnes(d,method="complete")#Hierarchical clustering using Complete Linkage
+hc_complete$ac#Agglomerative coefficient of hc_complete
+```
+
+```{r}
+hc_average<-agnes(d,method="average")#Hierarchical clustering using Average Linkage
+hc_average$ac#Agglomerative coefficient of hc_average
+```
+
+```{r}
+hc_ward<-agnes(d,method="ward")#Hierarchical clustering using Ward's method
+hc_ward$ac#Agglomerative coefficient of hc_ward
+```
+
+
+#Q2. How many clusters would you choose?
+
+#Answer: Conclusion: I chose a five-cluster solution based on three evaluation methods:
+#Elbow method: Suggested that the optimal number of clusters could be 3, 4, or 5.
+#Silhouette method: The average silhouette width continued to increase up to 10 clusters, but the improvement became noticeably smaller after five clusters. Therefore, a five-cluster solution provides a reasonable balance between accuracy and simplicity.
+#PCA method: Identified 5 principal components that together explain over 80% of the total variance.
+
+#Determining k based on elbow chart
+
+```{r}
+fviz_nbclust(scaledmydata, FUN = hcut, method="wss") # returned optimal number: 4, 5, and 6
+```
+
+#Determining k based on silhouette method
+
+```{r}
+fviz_nbclust(scaledmydata, FUN = hcut, method="silhouette") # returned optimal number:5
+```
+
+
+#Determining k based on PCA Package
+
+```{r}
+nbclust <- PCA(scaledmydata,  graph = FALSE)
+fviz_screeplot(nbclust, addlabels = TRUE, ylim = c(0, 50)) # returned optimal number:5
+```
+
+#Compute hierarchical clustering using Ward method
+
+```{r}
+set.seed(88)
+hccluster<-hclust(d,method="ward.D2")#ward.D2 corresponds to the ward   
+```
+
+
+#Visualize the clusters (k=5)
+
+```{r}
+hccluster_5<-cutree(hccluster,k=5)
+table(hccluster_5)
+```
+```{r}
+plot(hccluster, cex=0.6, hang=-1)#Plot the obtained dendrogram
+rect.hclust(hccluster, k=5, border=c("red", "blue", "green", "orange", "purple"))#to differentiate
+```
+
+```{r}
+# fviz_cluster function to visualize the clusters
+fviz_cluster(list(data = mydata, cluster = hccluster_5, repel = TRUE)) +
+  theme_minimal()
+```
+
+#Cluster assignment
+
+```{r}
+membership_5<-cutree(hccluster, k=5)
+head(membership_5)
+```
+#Centroid (mean value of each attribute)
+
+```{r}
+hccentroid_5<-data.frame(aggregate(scaledmydata,by=list(clusters=membership_5),mean))
+hccentroid_5
+```
+
+#Q3. Comment on the structure of the clusters and on their stability. Hint: To check stability, partition the data and see how well clusters formed based on one part apply to the other part. To do this: ● Cluster partition A ● Use the cluster centroids from A to assign each record in partition B (each record is assigned to the cluster with the closest centroid). ● Assess how consistent the cluster assignments are compared to the assignments based on all the data.
+
+#Answer: Partition A (70%) was used to compute cluster centroids, and Partition B (30%) was assigned to the closest cluster using Euclidean distance. All assignments matched the original clusters, with an ARI of 1, showing that the clustering solution is highly stable and consistent.
+
+
+Partition A (70%) and B (30%)
+
+```{r}
+mydata_hc5<-cbind(scaledmydata, hccluster_5)
+nrow(mydata_hc5)
+```
+
+```{r}
+subsetA<-data.frame(mydata_hc5[c(1:51),]) 
+head(subsetA)
+```
+
+```{r}
+subsetB<-data.frame(mydata_hc5[c(52:74),])
+head(subsetB)
+```
+
+```{r}
+#Centroid (subsetA) 
+subsetA_centroid<-data.frame(aggregate(subsetA,by=list(clusters=subsetA$hccluster_5),mean))
+View(subsetA_centroid)
+
+reference<-subsetA_centroid[,-1]
+reference<-reference[,-14]
+View(reference)
+input<-subsetB[,-14]
+View(input)
+
+dists <- pdist(input, reference) #Measure how far each record is from the centroid of each cluster using Euclidean distance
+as.matrix(dists) 
+```
+
+
+```{r}
+Dist_Cluster<-data.frame(as.matrix(dists)) #dataframe format
+View(Dist_Cluster)
+row.names(Dist_Cluster)<-row.names(subsetB) #give row names subsetB column
+names(Dist_Cluster)[names(Dist_Cluster) == 'X1'] <- 'Dist_Cluster1' #change column name
+names(Dist_Cluster)[names(Dist_Cluster) == 'X2'] <- 'Dist_Cluster2' 
+names(Dist_Cluster)[names(Dist_Cluster) == 'X3'] <- 'Dist_Cluster3' 
+names(Dist_Cluster)[names(Dist_Cluster) == 'X4'] <- 'Dist_Cluster4' 
+names(Dist_Cluster)[names(Dist_Cluster) == 'X5'] <- 'Dist_Cluster5' 
+Dist_Cluster$min_dist<- apply(Dist_Cluster, 1, function(x) colnames(Dist_Cluster)[which.min(x)]) # map column names
+Dist_Cluster$new_cluster[Dist_Cluster$min_dist == "Dist_Cluster1"] <- "1" #indexing the new cluster
+Dist_Cluster$new_cluster[Dist_Cluster$min_dist == "Dist_Cluster2"] <- "2" 
+Dist_Cluster$new_cluster[Dist_Cluster$min_dist == "Dist_Cluster3"] <- "3" 
+Dist_Cluster$new_cluster[Dist_Cluster$min_dist == "Dist_Cluster4"] <- "4" 
+Dist_Cluster$new_cluster[Dist_Cluster$min_dist == "Dist_Cluster5"] <- "5" 
+head(Dist_Cluster)
+```
+
+#Evaluate how consistent the cluster assignments are relative to those obtained from the full dataset
+
+```{r}
+ftable(subsetB$hccluster_5,Dist_Cluster$new_cluster) 
+```
+```{r}
+comparison<-table(subsetB$hccluster_5,Dist_Cluster$new_cluster) 
+randIndex(comparison)
+```
+
+
+#Q4.The elementary public schools would like to choose a set of cereals to include in their daily cafeterias. Every day a different cereal is offered, but all cereals should support a healthy diet. For this goal, you are requested to find a cluster of “healthy cereals.” Should the data be normalized? If not, how should they be used in the cluster analysis?
+
+#Answer: Before clustering cereals, it is usually recommended to normalize the data so that all nutrition variables have equal influence. This is important because clustering often uses Euclidean distance, which can be dominated by variables with larger scales. However, normalization is not always necessary. If certain nutrients (like sodium) are more important for defining “healthy” cereals, they can be given more weight by not normalizing or adjusting their scale. In this case, since most nutrition values are in comparable units (grams or milligrams), normalization isn’t required unless equal weighting is desired. Ultimately, the choice depends on the goal: clusters should highlight the “healthy” aspects that matter most, and the results should be checked to ensure the clusters make sense.
+
+
+
